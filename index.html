@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tic-Tac-Toe AI Benchmarking Lab</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              dark: '#0f172a',
+              card: '#1e293b',
+              accent: '#38bdf8',
+              accentHover: '#0284c7',
+              neonX: '#f43f5e',
+              neonO: '#06b6d4',
+              pruning: '#10b981',
+              minimax: '#a855f7'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Glow Effects */
+    .glow-x {
+      text-shadow: 0 0 15px rgba(244, 63, 94, 0.6);
+    }
+    .glow-o {
+      text-shadow: 0 0 15px rgba(6, 182, 212, 0.6);
+    }
+    .tile-glow {
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.15);
+    }
+
+    /* Board Tile Animations */
+    .tile-btn {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .tile-btn:hover:not(:disabled) {
+      transform: translateY(-2px) scale(1.02);
+      border-color: #38bdf8;
+      box-shadow: 0 10px 25px -5px rgba(56, 189, 248, 0.25);
+    }
+    .tile-btn:active:not(:disabled) {
+      transform: translateY(0) scale(0.98);
+    }
+
+    /* Custom Pulse animation for status */
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .animate-pulse-subtle {
+      animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between antialiased selection:bg-sky-500 selection:text-white">
+
+  <!-- Header / Navigation -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="p-2.5 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl shadow-lg shadow-cyan-500/20 text-white">
+          <i class="fa-solid fa-microchip text-xl"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold bg-gradient-to-r from-sky-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent">
+            AI Tic-Tac-Toe Analytics Lab
+          </h1>
+          <p class="text-xs text-slate-400">Minimax vs. Alpha-Beta Pruning Evaluator</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex items-center space-x-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
+        <button id="tab-game-btn" onclick="switchTab('game')" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all bg-sky-500 text-white shadow-md">
+          <i class="fa-solid fa-gamepad mr-1.5"></i> Play Arena
+        </button>
+        <button id="tab-benchmark-btn" onclick="switchTab('benchmark')" class="px-4 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-all">
+          <i class="fa-solid fa-chart-line mr-1.5"></i> 5-Trial Benchmark
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grow w-full">
+
+    <!-- TAB 1: GAME ARENA & REAL-TIME ANALYTICS -->
+    <div id="tab-game" class="space-y-6">
+      
+      <!-- Top Bar Controls -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-800/40 border border-slate-800 rounded-2xl p-4 backdrop-blur-sm">
+        
+        <!-- Difficulty Selector -->
+        <div class="flex flex-col justify-center">
+          <label class="text-xs text-slate-400 font-semibold mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-sliders text-sky-400"></i> Difficulty Level
+          </label>
+          <div class="grid grid-cols-3 gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-700/50">
+            <button onclick="setDifficulty('easy')" id="diff-easy" class="py-1.5 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-white">Easy</button>
+            <button onclick="setDifficulty('medium')" id="diff-medium" class="py-1.5 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-white">Medium</button>
+            <button onclick="setDifficulty('hard')" id="diff-hard" class="py-1.5 text-xs font-semibold rounded-lg transition-all bg-sky-500 text-white shadow-md">Hard</button>
+          </div>
+        </div>
+
+        <!-- Status Box -->
+        <div class="flex flex-col items-center justify-center bg-slate-900/60 border border-slate-700/50 rounded-xl p-2 text-center">
+          <span class="text-xs text-slate-400 uppercase tracking-wider mb-0.5">Current Match Status</span>
+          <div id="status-text" class="text-sm font-bold text-sky-400 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Your Turn ('O')
+          </div>
+        </div>
+
+        <!-- Action Controls -->
+        <div class="flex items-center justify-end gap-2">
+          <button onclick="resetGame()" class="flex-1 md:flex-none px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-xl transition-all border border-slate-600 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-rotate-right"></i> Restart Game
+          </button>
+          <button onclick="resetStats()" class="px-3 py-2 bg-slate-800 hover:bg-rose-950/40 hover:text-rose-400 text-slate-400 text-xs font-semibold rounded-xl transition-all border border-slate-700/60" title="Reset Lifetime Metrics">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Game Arena Grid Layout -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left Column: Tic Tac Toe Interactive Board -->
+        <div class="lg:col-span-5 flex flex-col items-center justify-center bg-slate-800/30 border border-slate-800/80 rounded-3xl p-6 relative overflow-hidden backdrop-blur-sm">
+          
+          <!-- Turn Banner Header -->
+          <div class="w-full flex items-center justify-between mb-6 px-2">
+            <div class="flex items-center space-x-2 bg-cyan-950/40 border border-cyan-800/50 px-3 py-1.5 rounded-xl">
+              <span class="text-cyan-400 font-extrabold text-lg glow-o">O</span>
+              <span class="text-xs text-cyan-200 font-medium">Human Player</span>
+            </div>
+            <span class="text-slate-500 font-black text-xs uppercase tracking-widest">VS</span>
+            <div class="flex items-center space-x-2 bg-rose-950/40 border border-rose-800/50 px-3 py-1.5 rounded-xl">
+              <span class="text-xs text-rose-200 font-medium">Bot AI</span>
+              <span class="text-rose-400 font-extrabold text-lg glow-x">X</span>
+            </div>
+          </div>
+
+          <!-- 3x3 Board Grid -->
+          <div class="grid grid-cols-3 gap-3 w-full max-w-[340px] aspect-square p-3 bg-slate-900/90 rounded-2xl border border-slate-700/80 shadow-2xl relative">
+            
+            <!-- Tiles 0-8 -->
+            <button onclick="makeHumanMove(0)" id="tile-0" class="tile-btn rounded-xl bg-slate-800/90 border border-slate-700/60 text-4xl font-black flex items-center justify-center text-slate-200 focus:outline-none"></button>
+            <button onclick="makeHumanMove(1)" id="tile-1" class="tile-btn rounded-xl bg-slate-800/90 border border-slate-700/60 text-4xl font-black flex items-center justify-center text-slate-200 focus:outline-none"></button>
+            <button onclick="makeHumanMove(2)" id="tile-2" class="tile-btn rounded-xl bg-slate-800/90 border border-slate-700/60 text-4xl font-black flex items-center justify-center text-slate-200 focus:outline-none"></button>
+            <button onclick="makeHumanMove(3)" id="tile-3" class="tile-btn rounded-xl bg-slate-800/90 border border-slate-700/60 text-4xl font-black flex items-center justify-center text-slate-200 focus:outline-none"></button>
+            <button onclick="makeHumanMove(4)" id="tile-4" class="tile-btn rounded-xl bg-slate-800/90 border border-slate-700/60 text-4xl font-black flex items-center justify-center text-slate-200 focus:outline-none"></button>
+            <button onclick="makeHumanMove(5)" id="tile-5" class="tile-btn rounded-xl bg-slate-800/90 border border-slate-700/60 text-4xl font-black flex items-center justify-center text-slate-200 focus:outline-none"></button>
+            <button onclick="makeHumanMove(6)" id="tile-6" class="tile-btn rounded-xl bg-slate-800/90 border border-slate-700/60 text-4xl font-black flex items-center justify-center text-slate-200 focus:outline-none"></button>
+            <button onclick="makeHumanMove(7)" id="tile-7" class="tile-btn rounded-xl bg-slate-800/90 border border-slate-700/60 text-4xl font-black flex items-center justify-center text-slate-200 focus:outline-none"></button>
+            <button onclick="makeHumanMove(8)" id="tile-8" class="tile-btn rounded-xl bg-slate-800/90 border border-slate-700/60 text-4xl font-black flex items-center justify-center text-slate-200 focus:outline-none"></button>
+
+            <!-- Loading Spinner Overlay when AI thinks -->
+            <div id="ai-spinner" class="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] rounded-2xl flex flex-col items-center justify-center gap-3 hidden z-10 transition-all">
+              <div class="w-10 h-10 border-4 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
+              <span class="text-xs font-semibold text-sky-300 tracking-wider">COMPUTING NODES...</span>
+            </div>
+
+            <!-- Game Over Overlay Banner -->
+            <div id="game-over-overlay" class="absolute inset-0 bg-slate-900/95 rounded-2xl flex flex-col items-center justify-center p-4 gap-3 hidden z-20 animate-fade-in">
+              <div id="winner-icon" class="text-5xl">🏆</div>
+              <h2 id="winner-title" class="text-xl font-bold text-white text-center">You Won!</h2>
+              <p id="winner-subtitle" class="text-xs text-slate-400 text-center">Bot couldn't counter your play.</p>
+              <button onclick="resetGame()" class="mt-2 px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all transform hover:scale-105">
+                Play Again
+              </button>
+            </div>
+          </div>
+
+          <!-- Bottom hint -->
+          <div class="mt-4 text-xs text-slate-500 text-center flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-info text-sky-400/70"></i> Click any empty tile to place your marker ('O')
+          </div>
+        </div>
+
+        <!-- Right Column: Real-Time Node Evaluator & Metrics Panel -->
+        <div class="lg:col-span-7 space-y-4">
+          
+          <!-- Real-Time Move Comparison Stats Card -->
+          <div class="bg-slate-800/40 border border-slate-800 rounded-2xl p-5 relative overflow-hidden backdrop-blur-sm">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-gauge-high text-sky-400"></i> Latest Move Evaluation Metrics
+              </h3>
+              <span id="last-move-tag" class="text-[10px] bg-slate-700/80 text-slate-300 px-2 py-0.5 rounded-md font-mono">Move #0</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              <!-- Pure Minimax Nodes -->
+              <div class="bg-slate-900/80 border border-purple-500/30 rounded-xl p-3.5 relative">
+                <div class="text-[11px] font-semibold text-purple-400 uppercase tracking-wider mb-1">Pure Minimax</div>
+                <div id="stat-minimax-nodes" class="text-2xl font-black text-white font-mono">0</div>
+                <div class="text-[10px] text-slate-400 mt-1">Evaluated Nodes</div>
+              </div>
+
+              <!-- Alpha-Beta Pruning Nodes -->
+              <div class="bg-slate-900/80 border border-emerald-500/30 rounded-xl p-3.5 relative">
+                <div class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider mb-1">Alpha-Beta Pruning</div>
+                <div id="stat-alphabeta-nodes" class="text-2xl font-black text-white font-mono">0</div>
+                <div class="text-[10px] text-slate-400 mt-1">Evaluated Nodes</div>
+              </div>
+
+              <!-- Efficiency Savings -->
+              <div class="bg-slate-900/80 border border-sky-500/30 rounded-xl p-3.5 relative">
+                <div class="text-[11px] font-semibold text-sky-400 uppercase tracking-wider mb-1">Pruning Savings</div>
+                <div id="stat-efficiency" class="text-2xl font-black text-emerald-400 font-mono">0.0%</div>
+                <div class="text-[10px] text-slate-400 mt-1">Fewer Nodes Computed</div>
+              </div>
+            </div>
+
+            <!-- Visual Progress Bar Comparison -->
+            <div class="space-y-2">
+              <div class="flex justify-between text-xs text-slate-400 font-medium">
+                <span>Node Scale Comparison</span>
+                <span id="pruning-badge" class="text-emerald-400 font-semibold text-[11px]">No move evaluations yet</span>
+              </div>
+              <div class="h-3 w-full bg-slate-900 rounded-full overflow-hidden flex p-0.5 border border-slate-700/50">
+                <div id="bar-alpha-beta" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+                <div id="bar-minimax-diff" class="h-full bg-purple-600/40 rounded-r-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cumulative Game Graph Card -->
+          <div class="bg-slate-800/40 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-chart-column text-purple-400"></i> Match Node Trajectory
+              </h3>
+              <div class="flex items-center gap-3 text-xs">
+                <span class="flex items-center gap-1 text-purple-400 font-medium"><span class="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span> Minimax</span>
+                <span class="flex items-center gap-1 text-emerald-400 font-medium"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Alpha-Beta</span>
+              </div>
+            </div>
+            <div class="h-44 w-full">
+              <canvas id="realtimeChart"></canvas>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: AUTOMATED 5-TRIAL BENCHMARK REPORT -->
+    <div id="tab-benchmark" class="space-y-6 hidden">
+      
+      <!-- Benchmark Controls Header -->
+      <div class="bg-slate-800/40 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-vial-circle-check text-emerald-400"></i> 5-Trial Automated Test Generator
+          </h2>
+          <p class="text-xs text-slate-400 mt-1 max-w-2xl">
+            Automatically simulates 5 games across all difficulty levels (Easy, Medium, Hard) by comparing Pure Minimax vs. Alpha-Beta Pruning decision trees on identical board states.
+          </p>
+        </div>
+        <button onclick="runBenchmarkSuite()" id="run-benchmark-btn" class="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 shrink-0">
+          <i class="fa-solid fa-play"></i> Run 5-Trial Benchmark
+        </button>
+      </div>
+
+      <!-- Summary Metrics Grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-slate-800/40 border border-slate-800 rounded-2xl p-4">
+          <span class="text-xs text-slate-400 font-semibold block mb-1">Avg. Easy Pruning Efficiency</span>
+          <div id="avg-easy-eff" class="text-2xl font-black text-sky-400 font-mono">-- %</div>
+          <span class="text-[10px] text-slate-500">Based on 5 simulated games</span>
+        </div>
+        <div class="bg-slate-800/40 border border-slate-800 rounded-2xl p-4">
+          <span class="text-xs text-slate-400 font-semibold block mb-1">Avg. Medium Pruning Efficiency</span>
+          <div id="avg-medium-eff" class="text-2xl font-black text-sky-400 font-mono">-- %</div>
+          <span class="text-[10px] text-slate-500">Based on 5 simulated games</span>
+        </div>
+        <div class="bg-slate-800/40 border border-slate-800 rounded-2xl p-4">
+          <span class="text-xs text-slate-400 font-semibold block mb-1">Avg. Hard Pruning Efficiency</span>
+          <div id="avg-hard-eff" class="text-2xl font-black text-emerald-400 font-mono">-- %</div>
+          <span class="text-[10px] text-slate-500">Based on 5 simulated games</span>
+        </div>
+      </div>
+
+      <!-- Benchmark Results Chart -->
+      <div class="bg-slate-800/40 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm">
+        <h3 class="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-chart-simple text-sky-400"></i> Benchmark Comparison Across Difficulties (5 Games Each)
+        </h3>
+        <div class="h-64 w-full">
+          <canvas id="benchmarkChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Benchmark Report Data Table -->
+      <div class="bg-slate-800/40 border border-slate-800 rounded-2xl overflow-hidden backdrop-blur-sm">
+        <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <i class="fa-solid fa-table text-indigo-400"></i> Detailed Trial Results Log
+          </h3>
+          <span class="text-xs text-slate-400" id="report-count-tag">15 Total Trials</span>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900/80 uppercase font-semibold text-slate-400 border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-4">Game #</th>
+                <th class="py-3 px-4">Difficulty</th>
+                <th class="py-3 px-4">Outcome</th>
+                <th class="py-3 px-4 text-right">Pure Minimax Nodes</th>
+                <th class="py-3 px-4 text-right">Alpha-Beta Nodes</th>
+                <th class="py-3 px-4 text-right">Efficiency Savings</th>
+              </tr>
+            </thead>
+            <tbody id="benchmark-table-body" class="divide-y divide-slate-800/60 font-mono">
+              <tr>
+                <td colspan="6" class="py-8 text-center text-slate-500 italic font-sans">
+                  Click "Run 5-Trial Benchmark" above to generate real-time metrics.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-slate-900/50 py-4 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4">
+      Tic-Tac-Toe Minimax vs Alpha-Beta Analytics Lab &bull; Self-Contained Web Application
+    </div>
+  </footer>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    /* ==========================================================================
+       STATE & GLOBAL VARIABLES
+       ========================================================================== */
+    let board = Array(9).fill(' ');
+    let currentDifficulty = 'hard';
+    let isGameOver = false;
+    let isAiThinking = false;
+    let moveCount = 0;
+
+    // Node counters for current turn
+    let turnMinimaxNodes = 0;
+    let turnAlphaBetaNodes = 0;
+
+    // Realtime chart data trackers for active game
+    let gameMinimaxHistory = [];
+    let gameAlphaBetaHistory = [];
+    let gameMoveLabels = [];
+
+    // Chart.js Instances
+    let realtimeChart = null;
+    let benchmarkChart = null;
+
+    /* ==========================================================================
+       INITIALIZATION & TAB MANAGEMENT
+       ========================================================================== */
+    window.onload = function() {
+      initRealtimeChart();
+      initBenchmarkChart();
+      resetGame();
+    };
+
+    function switchTab(tabName) {
+      const gameTab = document.getElementById('tab-game');
+      const benchmarkTab = document.getElementById('tab-benchmark');
+      const gameBtn = document.getElementById('tab-game-btn');
+      const benchBtn = document.getElementById('tab-benchmark-btn');
+
+      if (tabName === 'game') {
+        gameTab.classList.remove('hidden');
+        benchmarkTab.classList.add('hidden');
+        gameBtn.className = "px-4 py-1.5 rounded-lg text-sm font-medium transition-all bg-sky-500 text-white shadow-md";
+        benchBtn.className = "px-4 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-all";
+      } else {
+        gameTab.classList.add('hidden');
+        benchmarkTab.classList.remove('hidden');
+        benchBtn.className = "px-4 py-1.5 rounded-lg text-sm font-medium transition-all bg-sky-500 text-white shadow-md";
+        gameBtn.className = "px-4 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-all";
+      }
+    }
+
+    /* ==========================================================================
+       TIC-TAC-TOE CORE ALGORITHMS & HELPERS
+       ========================================================================== */
+    function checkWinner(b) {
+      const winPatterns = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+        [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+        [0, 4, 8], [2, 4, 6]              // Diagonals
+      ];
+      for (let p of winPatterns) {
+        if (b[p[0]] !== ' ' && b[p[0]] === b[p[1]] && b[p[1]] === b[p[2]]) {
+          return b[p[0]];
+        }
+      }
+      if (!b.includes(' ')) return 'DRAW';
+      return null;
+    }
+
+    /* --- PURE MINIMAX ALGORITHM --- */
+    function minimaxPure(b, depth, isMaximizing) {
+      turnMinimaxNodes++;
+      const winner = checkWinner(b);
+      if (winner === 'X') return 10 - depth;
+      if (winner === 'O') return depth - 10;
+      if (winner === 'DRAW') return 0;
+
+      if (isMaximizing) {
+        let bestScore = -Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (b[i] === ' ') {
+            b[i] = 'X';
+            let score = minimaxPure(b, depth + 1, false);
+            b[i] = ' ';
+            bestScore = Math.max(score, bestScore);
+          }
+        }
+        return bestScore;
+      } else {
+        let bestScore = Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (b[i] === ' ') {
+            b[i] = 'O';
+            let score = minimaxPure(b, depth + 1, true);
+            b[i] = ' ';
+            bestScore = Math.min(score, bestScore);
+          }
+        }
+        return bestScore;
+      }
+    }
+
+    /* --- ALPHA-BETA PRUNING ALGORITHM --- */
+    function minimaxAlphaBeta(b, depth, alpha, beta, isMaximizing) {
+      turnAlphaBetaNodes++;
+      const winner = checkWinner(b);
+      if (winner === 'X') return 10 - depth;
+      if (winner === 'O') return depth - 10;
+      if (winner === 'DRAW') return 0;
+
+      if (isMaximizing) {
+        let bestScore = -Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (b[i] === ' ') {
+            b[i] = 'X';
+            let score = minimaxAlphaBeta(b, depth + 1, alpha, beta, false);
+            b[i] = ' ';
+            bestScore = Math.max(score, bestScore);
+            alpha = Math.max(alpha, bestScore);
+            if (beta <= alpha) break; // Pruning
+          }
+        }
+        return bestScore;
+      } else {
+        let bestScore = Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (b[i] === ' ') {
+            b[i] = 'O';
+            let score = minimaxAlphaBeta(b, depth + 1, alpha, beta, true);
+            b[i] = ' ';
+            bestScore = Math.min(score, bestScore);
+            beta = Math.min(beta, bestScore);
+            if (beta <= alpha) break; // Pruning
+          }
+        }
+        return bestScore;
+      }
+    }
+
+    /* --- COMPUTING AI BEST MOVE & NODE COMPARISON --- */
+    function computeBestMove(currentBoard) {
+      turnMinimaxNodes = 0;
+      turnAlphaBetaNodes = 0;
+
+      // 1. Run Pure Minimax to simulate and count full node tree
+      for (let i = 0; i < 9; i++) {
+        if (currentBoard[i] === ' ') {
+          currentBoard[i] = 'X';
+          minimaxPure(currentBoard, 0, false);
+          currentBoard[i] = ' ';
+        }
+      }
+
+      // 2. Run Alpha-Beta Pruning to get best move and count pruned tree
+      let bestScore = -Infinity;
+      let bestMove = -1;
+
+      for (let i = 0; i < 9; i++) {
+        if (currentBoard[i] === ' ') {
+          currentBoard[i] = 'X';
+          let score = minimaxAlphaBeta(currentBoard, 0, -Infinity, Infinity, false);
+          currentBoard[i] = ' ';
+          if (score > bestScore) {
+            bestScore = score;
+            bestMove = i;
+          }
+        }
+      }
+
+      return { bestMove, minimaxNodes: turnMinimaxNodes, alphaBetaNodes: turnAlphaBetaNodes };
+    }
+
+    /* ==========================================================================
+       GAME ARENA PLAY LOGIC
+       ========================================================================== */
+    function setDifficulty(diff) {
+      currentDifficulty = diff;
+      document.querySelectorAll('#diff-easy, #diff-medium, #diff-hard').forEach(btn => {
+        btn.className = "py-1.5 text-xs font-semibold rounded-lg transition-all text-slate-400 hover:text-white";
+      });
+      const activeBtn = document.getElementById(`diff-${diff}`);
+      if (activeBtn) activeBtn.className = "py-1.5 text-xs font-semibold rounded-lg transition-all bg-sky-500 text-white shadow-md";
+      resetGame();
+    }
+
+    function makeHumanMove(index) {
+      if (board[index] !== ' ' || isGameOver || isAiThinking) return;
+
+      // Place Human Marker ('O')
+      board[index] = 'O';
+      renderBoard();
+      
+      const winner = checkWinner(board);
+      if (winner) {
+        handleGameOver(winner);
+        return;
+      }
+
+      // AI Turn
+      triggerAiMove();
+    }
+
+    function triggerAiMove() {
+      isAiThinking = true;
+      document.getElementById('ai-spinner').classList.remove('hidden');
+      document.getElementById('status-text').innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400 animate-ping"></span> Bot AI is Thinking...`;
+
+      setTimeout(() => {
+        moveCount++;
+        const availableMoves = board.map((v, i) => v === ' ' ? i : null).filter(v => v !== null);
+        
+        let chosenMove = -1;
+        let evalData = { minimaxNodes: 0, alphaBetaNodes: 0 };
+
+        // Determine move based on difficulty
+        if (currentDifficulty === 'easy') {
+          chosenMove = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+          // Run comparison calculation in background for analytics visualization
+          evalData = computeBestMove([...board]);
+        } else if (currentDifficulty === 'medium') {
+          if (Math.random() < 0.5) {
+            let result = computeBestMove([...board]);
+            chosenMove = result.bestMove;
+            evalData = result;
+          } else {
+            chosenMove = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+            evalData = computeBestMove([...board]);
+          }
+        } else { // 'hard'
+          let result = computeBestMove([...board]);
+          chosenMove = result.bestMove;
+          evalData = result;
+        }
+
+        if (chosenMove !== -1 && chosenMove !== undefined) {
+          board[chosenMove] = 'X';
+        }
+
+        // Update Node Evaluator Dashboard
+        updateMoveMetrics(evalData.minimaxNodes, evalData.alphaBetaNodes, moveCount);
+
+        isAiThinking = false;
+        document.getElementById('ai-spinner').classList.add('hidden');
+        renderBoard();
+
+        const winner = checkWinner(board);
+        if (winner) {
+          handleGameOver(winner);
+        } else {
+          document.getElementById('status-text').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Your Turn ('O')`;
+        }
+      }, 350);
+    }
+
+    function renderBoard() {
+      for (let i = 0; i < 9; i++) {
+        const tile = document.getElementById(`tile-${i}`);
+        tile.innerHTML = '';
+        if (board[i] === 'O') {
+          tile.innerHTML = `<span class="text-cyan-400 glow-o animate-scale-up">O</span>`;
+        } else if (board[i] === 'X') {
+          tile.innerHTML = `<span class="text-rose-400 glow-x animate-scale-up">X</span>`;
+        }
+      }
+    }
+
+    function handleGameOver(winner) {
+      isGameOver = true;
+      const overlay = document.getElementById('game-over-overlay');
+      const title = document.getElementById('winner-title');
+      const subtitle = document.getElementById('winner-subtitle');
+      const icon = document.getElementById('winner-icon');
+
+      overlay.classList.remove('hidden');
+
+      if (winner === 'O') {
+        icon.innerText = "🎉";
+        title.innerText = "Victory! You Won!";
+        title.className = "text-xl font-bold text-cyan-400 text-center";
+        subtitle.innerText = "You successfully outmaneuvered the AI bot.";
+        document.getElementById('status-text').innerHTML = `<span class="text-cyan-400 font-bold">You Won!</span>`;
+      } else if (winner === 'X') {
+        icon.innerText = "🤖";
+        title.innerText = "Bot AI Victory!";
+        title.className = "text-xl font-bold text-rose-400 text-center";
+        subtitle.innerText = "Minimax algorithm found an optimal winning path.";
+        document.getElementById('status-text').innerHTML = `<span class="text-rose-400 font-bold">Bot AI Won!</span>`;
+      } else {
+        icon.innerText = "🤝";
+        title.innerText = "Game Drawn!";
+        title.className = "text-xl font-bold text-slate-200 text-center";
+        subtitle.innerText = "Perfect play resulted in a tie.";
+        document.getElementById('status-text').innerHTML = `<span class="text-slate-400 font-bold">Match Drawn</span>`;
+      }
+    }
+
+    function resetGame() {
+      board = Array(9).fill(' ');
+      isGameOver = false;
+      isAiThinking = false;
+      moveCount = 0;
+      
+      document.getElementById('game-over-overlay').classList.add('hidden');
+      document.getElementById('status-text').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Your Turn ('O')`;
+      
+      // Clear Realtime Chart histories
+      gameMinimaxHistory = [];
+      gameAlphaBetaHistory = [];
+      gameMoveLabels = [];
+      updateRealtimeChart();
+
+      // Reset turn metric UI displays
+      document.getElementById('stat-minimax-nodes').innerText = '0';
+      document.getElementById('stat-alphabeta-nodes').innerText = '0';
+      document.getElementById('stat-efficiency').innerText = '0.0%';
+      document.getElementById('last-move-tag').innerText = 'Move #0';
+      document.getElementById('bar-alpha-beta').style.width = '0%';
+      document.getElementById('bar-minimax-diff').style.width = '0%';
+      document.getElementById('pruning-badge').innerText = 'Waiting for AI move...';
+
+      renderBoard();
+    }
+
+    function resetStats() {
+      resetGame();
+    }
+
+    /* ==========================================================================
+       METRICS & REAL-TIME CHART UPDATES
+       ========================================================================== */
+    function updateMoveMetrics(mmNodes, abNodes, moveNum) {
+      document.getElementById('stat-minimax-nodes').innerText = mmNodes.toLocaleString();
+      document.getElementById('stat-alphabeta-nodes').innerText = abNodes.toLocaleString();
+      document.getElementById('last-move-tag').innerText = `Move #${moveNum}`;
+
+      let efficiency = 0;
+      if (mmNodes > 0) {
+        efficiency = ((mmNodes - abNodes) / mmNodes) * 100;
+      }
+      document.getElementById('stat-efficiency').innerText = `${efficiency.toFixed(1)}%`;
+
+      // Visual Bar Scaling
+      let abPercent = mmNodes > 0 ? (abNodes / mmNodes) * 100 : 0;
+      let diffPercent = 100 - abPercent;
+
+      document.getElementById('bar-alpha-beta').style.width = `${abPercent}%`;
+      document.getElementById('bar-minimax-diff').style.width = `${diffPercent}%`;
+
+      document.getElementById('pruning-badge').innerText = `Pruning eliminated ${diffPercent.toFixed(1)}% of search tree`;
+
+      // Update Chart Data
+      gameMoveLabels.push(`Move ${moveNum}`);
+      gameMinimaxHistory.push(mmNodes);
+      gameAlphaBetaHistory.push(abNodes);
+      updateRealtimeChart();
+    }
+
+    function initRealtimeChart() {
+      const ctx = document.getElementById('realtimeChart').getContext('2d');
+      realtimeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Pure Minimax',
+              data: [],
+              backgroundColor: 'rgba(168, 85, 247, 0.7)',
+              borderColor: '#a855f7',
+              borderWidth: 1,
+              borderRadius: 4
+            },
+            {
+              label: 'Alpha-Beta Pruning',
+              data: [],
+              backgroundColor: 'rgba(16, 185, 129, 0.7)',
+              borderColor: '#10b981',
+              borderWidth: 1,
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#94a3b8', font: { size: 10 } }
+            },
+            y: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#94a3b8', font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    function updateRealtimeChart() {
+      if (!realtimeChart) return;
+      realtimeChart.data.labels = gameMoveLabels;
+      realtimeChart.data.datasets[0].data = gameMinimaxHistory;
+      realtimeChart.data.datasets[1].data = gameAlphaBetaHistory;
+      realtimeChart.update();
+    }
+
+    /* ==========================================================================
+       BENCHMARK SUITE (5 TRIALS PER DIFFICULTY)
+       ========================================================================== */
+    function initBenchmarkChart() {
+      const ctx = document.getElementById('benchmarkChart').getContext('2d');
+      benchmarkChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: ['Game 1', 'Game 2', 'Game 3', 'Game 4', 'Game 5'],
+          datasets: [
+            {
+              label: 'Minimax Nodes (Hard)',
+              data: [],
+              borderColor: '#a855f7',
+              backgroundColor: 'rgba(168, 85, 247, 0.1)',
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'Alpha-Beta Nodes (Hard)',
+              data: [],
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              tension: 0.3,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#cbd5e1', font: { size: 11 } }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#94a3b8' }
+            },
+            y: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#94a3b8' }
+            }
+          }
+        }
+      });
+    }
+
+    function runBenchmarkSuite() {
+      const runBtn = document.getElementById('run-benchmark-btn');
+      runBtn.disabled = true;
+      runBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Simulating 15 Matches...`;
+
+      setTimeout(() => {
+        const difficulties = ['easy', 'medium', 'hard'];
+        const allResults = [];
+
+        difficulties.forEach(diff => {
+          for (let trial = 1; trial <= 5; trial++) {
+            let simBoard = Array(9).fill(' ');
+            let totalMM = 0;
+            let totalAB = 0;
+            let movesCount = 0;
+            let currentTurn = 'O'; // Human 'O' vs Bot 'X'
+
+            while (!checkWinner(simBoard)) {
+              movesCount++;
+              let available = simBoard.map((v, i) => v === ' ' ? i : null).filter(v => v !== null);
+              if (available.length === 0) break;
+
+              if (currentTurn === 'O') {
+                // Simulated human player move with slight variation
+                let oMove = available[Math.floor(Math.random() * available.length)];
+                simBoard[oMove] = 'O';
+                currentTurn = 'X';
+              } else {
+                // Bot Turn 'X'
+                let res = computeBestMove([...simBoard]);
+                totalMM += res.minimaxNodes;
+                totalAB += res.alphaBetaNodes;
+
+                let botMove = -1;
+                if (diff === 'easy') {
+                  botMove = available[Math.floor(Math.random() * available.length)];
+                } else if (diff === 'medium') {
+                  botMove = Math.random() < 0.5 ? res.bestMove : available[Math.floor(Math.random() * available.length)];
+                } else {
+                  botMove = res.bestMove;
+                }
+
+                if (botMove !== -1 && botMove !== undefined) {
+                  simBoard[botMove] = 'X';
+                }
+                currentTurn = 'O';
+              }
+            }
+
+            let winner = checkWinner(simBoard) || 'DRAW';
+            let efficiency = totalMM > 0 ? ((totalMM - totalAB) / totalMM) * 100 : 0;
+
+            allResults.push({
+              trial,
+              difficulty: diff,
+              outcome: winner,
+              minimaxNodes: totalMM,
+              alphaBetaNodes: totalAB,
+              efficiency: efficiency
+            });
+          }
+        });
+
+        // Render Table & Summary Cards
+        renderBenchmarkTable(allResults);
+
+        runBtn.disabled = false;
+        runBtn.innerHTML = `<i class="fa-solid fa-play"></i> Run 5-Trial Benchmark`;
+      }, 500);
+    }
+
+    function renderBenchmarkTable(results) {
+      const tbody = document.getElementById('benchmark-table-body');
+      tbody.innerHTML = '';
+
+      let hardMM = [];
+      let hardAB = [];
+
+      let easyEffSum = 0, medEffSum = 0, hardEffSum = 0;
+      let easyCount = 0, medCount = 0, hardCount = 0;
+
+      results.forEach((r, idx) => {
+        if (r.difficulty === 'easy') { easyEffSum += r.efficiency; easyCount++; }
+        if (r.difficulty === 'medium') { medEffSum += r.efficiency; medCount++; }
+        if (r.difficulty === 'hard') { 
+          hardEffSum += r.efficiency; 
+          hardCount++;
+          hardMM.push(r.minimaxNodes);
+          hardAB.push(r.alphaBetaNodes);
+        }
+
+        let badgeColor = "bg-slate-700 text-slate-300";
+        if (r.difficulty === 'easy') badgeColor = "bg-emerald-950/60 text-emerald-400 border border-emerald-800/50";
+        if (r.difficulty === 'medium') badgeColor = "bg-amber-950/60 text-amber-400 border border-amber-800/50";
+        if (r.difficulty === 'hard') badgeColor = "bg-rose-950/60 text-rose-400 border border-rose-800/50";
+
+        let outcomeBadge = "text-slate-400";
+        if (r.outcome === 'X') outcomeBadge = "text-rose-400 font-bold";
+        if (r.outcome === 'O') outcomeBadge = "text-cyan-400 font-bold";
+
+        const row = document.createElement('tr');
+        row.className = "hover:bg-slate-800/50 transition-colors";
+        row.innerHTML = `
+          <td class="py-2.5 px-4 font-bold text-slate-400">#${idx + 1}</td>
+          <td class="py-2.5 px-4">
+            <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold ${badgeColor}">${r.difficulty}</span>
+          </td>
+          <td class="py-2.5 px-4 ${outcomeBadge}">${r.outcome === 'DRAW' ? 'Draw' : 'Winner ' + r.outcome}</td>
+          <td class="py-2.5 px-4 text-right text-purple-300 font-mono">${r.minimaxNodes.toLocaleString()}</td>
+          <td class="py-2.5 px-4 text-right text-emerald-300 font-mono">${r.alphaBetaNodes.toLocaleString()}</td>
+          <td class="py-2.5 px-4 text-right font-bold text-sky-400 font-mono">${r.efficiency.toFixed(1)}%</td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      // Update Summary Cards
+      document.getElementById('avg-easy-eff').innerText = `${(easyEffSum / easyCount).toFixed(1)}%`;
+      document.getElementById('avg-medium-eff').innerText = `${(medEffSum / medCount).toFixed(1)}%`;
+      document.getElementById('avg-hard-eff').innerText = `${(hardEffSum / hardCount).toFixed(1)}%`;
+
+      // Update Line Chart for Hard Mode Trials
+      if (benchmarkChart) {
+        benchmarkChart.data.datasets[0].data = hardMM;
+        benchmarkChart.data.datasets[1].data = hardAB;
+        benchmarkChart.update();
+      }
+    }
+  </script>
+</body>
+</html>
